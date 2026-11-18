@@ -1,0 +1,65 @@
+name: Proofed
+
+# Every push to a pull request: Kane checks the scenarios the change touches, and when one fails,
+# Codex fixes it and Kane checks the fix before it is pushed.
+on:
+  pull_request:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  id-token: write
+
+jobs:
+  proofed:
+    name: Proofed
+    if: >-
+      github.event_name == 'pull_request' || (
+        github.event.issue.pull_request && ((
+          github.event.action == 'created' &&
+          contains(github.event.comment.body, '/proofed') &&
+          contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+        ) || (
+          github.event.action == 'edited' &&
+          github.event.comment.user.type == 'Bot' &&
+          contains(github.event.comment.body, '<!-- proofed -->') &&
+          contains(github.event.comment.body, '- [x] **Fix with Codex**')
+        ))
+      )
+    # Kane runs Android apps in a local emulator, so this job runs on a Mac with one booted.
+    runs-on: [self-hosted, macOS, ARM64, proofed-android]
+    timeout-minutes: 45
+    concurrency:
+      group: proofed-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' && github.actor != 'proofed-by-kane[bot]' }}
+    steps:
+      - uses: t1dem/proofed@night-work
+        with:
+          target: android
+          execution: local
+          install: |
+            chmod +x gradlew
+            export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+            export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+            if [ ! -f "$ANDROID_HOME/platforms/android-36/android.jar" ] || [ ! -x "$ANDROID_HOME/build-tools/36.0.0/aapt2" ]; then
+              "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" 'platforms;android-36' 'build-tools;36.0.0'
+            fi
+          build: |
+            export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+            export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+            ./gradlew :AnkiDroid:assembleFullDebug
+            # Skip Android's first-run storage prompt for this debug package on the test emulator.
+            adb="$HOME/.testmuai/kaneai/mobile/deps/0.0.1/emulator/platform-tools/adb"
+            "$adb" -s emulator-5554 install -r AnkiDroid/build/outputs/apk/full/debug/AnkiDroid-full-arm64-v8a-debug.apk
+            "$adb" -s emulator-5554 shell cmd appops set --uid com.ichi2.anki.debug MANAGE_EXTERNAL_STORAGE allow
+          app: AnkiDroid/build/outputs/apk/full/debug/AnkiDroid-full-arm64-v8a-debug.apk
+          device: Pixel_8_API_34
+          os-version: '14'
+          lt-username: ${{ secrets.LT_USERNAME }}
+          lt-access-key: ${{ secrets.LT_ACCESS_KEY }}
+          codex-auth-json: ${{ secrets.CODEX_AUTH_JSON }}
+          vars: ${{ toJSON(vars) }}
