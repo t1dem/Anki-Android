@@ -43,7 +43,6 @@ import com.ichi2.anki.dialogs.DeckSelectionDialog
 import com.ichi2.anki.dialogs.ManageSavedSearchAction
 import com.ichi2.anki.dialogs.SaveBrowserSearchDialogFragment
 import com.ichi2.anki.dialogs.SavedBrowserSearchesDialogFragment
-import com.ichi2.anki.dialogs.registerDeckSelectedHandler
 import com.ichi2.anki.dialogs.registerSaveSearchHandler
 import com.ichi2.anki.dialogs.registerSavedSearchActionHandler
 import com.ichi2.anki.dialogs.tags.TagsDialog
@@ -53,6 +52,7 @@ import com.ichi2.anki.launchCatchingTask
 import com.ichi2.anki.libanki.DeckNameId
 import com.ichi2.anki.model.CardStateFilter
 import com.ichi2.anki.model.SelectableDeck
+import com.ichi2.anki.utils.ext.getParcelableCompat
 import com.ichi2.anki.utils.ext.hasCheckedBackground
 import com.ichi2.anki.utils.ext.launchCollectionInLifecycleScope
 import com.ichi2.anki.utils.ext.showDialogFragment
@@ -77,6 +77,9 @@ class StandardSearchFragment :
 
         tagsDialogFactory = TagsDialogFactory(this).attachToActivity<TagsDialogFactory>(requireActivity())
 
+        childFragmentManager.setFragmentResultListener(DeckSelectionDialog.REQUEST_SELECT_DECK, this) { _, bundle ->
+            onDeckSelected(bundle.getParcelableCompat<SelectableDeck>(DeckSelectionDialog.ARG_SELECTED_DECK))
+        }
         registerSaveSearchHandler {
             viewModel.addSavedSearch(it)
         }
@@ -99,8 +102,6 @@ class StandardSearchFragment :
         super.onViewCreated(view, savedInstanceState)
 
         binding.toggleAdvancedSearch.setOnClickListener { viewModel.toggleAdvancedSearch() }
-
-        registerDeckSelectedHandler(action = ::onDeckSelected)
 
         setupChips()
         setupSearchHistory()
