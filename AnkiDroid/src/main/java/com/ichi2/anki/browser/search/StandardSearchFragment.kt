@@ -52,6 +52,7 @@ import com.ichi2.anki.launchCatchingTask
 import com.ichi2.anki.libanki.DeckNameId
 import com.ichi2.anki.model.CardStateFilter
 import com.ichi2.anki.model.SelectableDeck
+import com.ichi2.anki.utils.ext.getParcelableCompat
 import com.ichi2.anki.utils.ext.hasCheckedBackground
 import com.ichi2.anki.utils.ext.launchCollectionInLifecycleScope
 import com.ichi2.anki.utils.ext.showDialogFragment
@@ -62,7 +63,6 @@ import timber.log.Timber
 
 class StandardSearchFragment :
     Fragment(R.layout.fragment_standard_search),
-    DeckSelectionDialog.DeckSelectionListener,
     TagsDialogListener {
     @VisibleForTesting
     val binding by viewBinding(FragmentStandardSearchBinding::bind)
@@ -77,6 +77,9 @@ class StandardSearchFragment :
 
         tagsDialogFactory = TagsDialogFactory(this).attachToActivity<TagsDialogFactory>(requireActivity())
 
+        childFragmentManager.setFragmentResultListener(DeckSelectionDialog.REQUEST_SELECT_DECK, this) { _, bundle ->
+            onDeckSelected(bundle.getParcelableCompat<SelectableDeck>(DeckSelectionDialog.ARG_SELECTED_DECK))
+        }
         registerSaveSearchHandler {
             viewModel.addSavedSearch(it)
         }
@@ -114,8 +117,6 @@ class StandardSearchFragment :
                 val dialog =
                     DeckSelectionDialog.newInstance(
                         title = getString(R.string.search_deck),
-                        summaryMessage = null,
-                        keepRestoreDefaultButton = false,
                         decks = decks,
                     )
                 dialog.show(childFragmentManager, "selectDeck")
@@ -185,7 +186,7 @@ class StandardSearchFragment :
         }
     }
 
-    override fun onDeckSelected(deck: SelectableDeck?) {
+    private fun onDeckSelected(deck: SelectableDeck?) {
         viewModel.setDecksFilter(deck?.toDeckNameIdList() ?: return)
     }
 
